@@ -27,37 +27,35 @@ split_names = str_split(names, pattern = " ", simplify = TRUE)
 #Bounding box for search
 lat_range = c(34, 34.5)
 lon_range = c(-119.25, -118)
-
 bounds = c(-120, 33, -116, 35.5)
 
-#pulling occurences
-test = get_clean_obs(genus = split_names[1,1], species = split_names[1,2], 
-                     lonlim = c(-119.25, -118), latlim = c(34, 34.5))
-
-data_list = list()
-for(i in 1:length(names)) {
-  sub_data = get_clean_obs(genus = split_names[i,1], species = split_names[i,2], 
-                           lonlim = c(-119.25, -118), latlim = c(34, 34.5))
-  data_list[[i]] = sub_data
-}
-
 #Custom function
-butt_obs = function(names){
-  df = data.frame()
+get_butts = function(names, bounds) {
+  big_list = list()
+  
   for (i in 1:length(names)){
-    sub = occ(geometry = bounds, query = names[i], from = "gbif", limit = 100000, 
-              has_coords=TRUE, 
-              gbifopts=list(continent='north_america'))
-    df = bind_rows(df, sub$gbif$data[[1]] %>%
-                     mutate(true_name = names[i]))
+    temp_occ = occ(geometry = bounds, query = names[i], from = c("gbif", "inat"), 
+                   limit = 10000)
+    big_list[i] = temp_occ
   }
-  return(df)
+  return(big_list)
 }
 
-occs = butt_obs(names = names)
-occs = occs %>%
-  select(name, longitude, latitude, key, family, genus, species, stateProvince, 
-         year, month, day, eventDate, countryCode, county, true_name) %>%
-  as_tibble()
+occs = get_butts(names = names, bounds = bounds)
 
-write_csv(occs, path = "./data/gbif_butterfly_occs.csv")
+
+occs_mod = lapply(occs, '[[', 2)
+occs_mod = lapply(occs_mod, '[[', 1)
+occs_df = bind_rows(occs_mod)
+
+occs_df_small = occs_df %>%
+  dplyr::select(name = scientificName, longitude, 
+         latitude, date = eventDate, 
+         country = country, state = stateProvince) %>%
+  drop_na()
+
+occs_df_unique = occs_df_small %>%
+  distinct(longitude, latitude, name, .keep_all=TRUE)
+# checking for duplicates
+
+write_csv(occs_df_unique, path = "./data/gbif_inat_butterfly_occs.csv")
